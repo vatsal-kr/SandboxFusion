@@ -15,7 +15,7 @@ conda create -n sandbox-runtime -y python=3.10
 source activate sandbox-runtime
 
 if [ $USE_OFFICIAL_SOURCE -eq 0 ]; then
-    pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 fi
 
 pip install -r ./requirements.txt --ignore-requires-python
