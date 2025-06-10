@@ -36,6 +36,7 @@ async def get_healthy_jupyter(config):
             await km.start_kernel()
             kc = km.client()
             kc.start_channels()
+            await kc.wait_for_ready()
 
             stdout = ''
             def hook(msg):
