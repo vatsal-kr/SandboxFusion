@@ -7,6 +7,7 @@ Please view the complete documentation at https://bytedance.github.io/SandboxFus
 ## Table of Contents
 
 - [Features](#features)
+- [Cite](#cite)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -55,6 +56,20 @@ Jupyter mode kernels:
 - [NaturalCodeBench](https://github.com/THUDM/NaturalCodeBench)
 - [PAL-Math](https://github.com/deepseek-ai/DeepSeek-Coder/tree/main/Evaluation/PAL-Math)
 - [verilog-eval](https://github.com/NVlabs/verilog-eval)
+
+## Cite
+
+```
+@misc{bytedanceseedfoundationcodeteam2025fullstackbenchevaluatingllms,
+      title={FullStack Bench: Evaluating LLMs as Full Stack Coders}, 
+      author={Bytedance-Seed-Foundation-Code-Team and : and Yao Cheng and Jianfeng Chen and Jie Chen and Li Chen and Liyu Chen and Wentao Chen and Zhengyu Chen and Shijie Geng and Aoyan Li and Bo Li and Bowen Li and Linyi Li and Boyi Liu and Jiaheng Liu and Kaibo Liu and Qi Liu and Shukai Liu and Siyao Liu and Tianyi Liu and Tingkai Liu and Yongfei Liu and Rui Long and Jing Mai and Guanghan Ning and Z. Y. Peng and Kai Shen and Jiahao Su and Jing Su and Tao Sun and Yifan Sun and Yunzhe Tao and Guoyin Wang and Siwei Wang and Xuwu Wang and Yite Wang and Zihan Wang and Jinxiang Xia and Liang Xiang and Xia Xiao and Yongsheng Xiao and Chenguang Xi and Shulin Xin and Jingjing Xu and Shikun Xu and Hongxia Yang and Jack Yang and Yingxiang Yang and Jianbo Yuan and Jun Zhang and Yufeng Zhang and Yuyu Zhang and Shen Zheng and He Zhu and Ming Zhu},
+      year={2025},
+      eprint={2412.00535},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2412.00535}, 
+}
+```
 
 ## Contributing
 
