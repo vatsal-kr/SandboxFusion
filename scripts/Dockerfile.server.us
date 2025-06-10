@@ -1,4 +1,4 @@
-FROM volcengine/sandbox-fusion:base-20241121
+FROM volcengine/sandbox-fusion:base-20250609
 
 COPY ./runtime/go ./runtime/go
 # download and cache go deps
