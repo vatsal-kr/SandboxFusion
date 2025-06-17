@@ -40,6 +40,7 @@ logger = structlog.stdlib.get_logger()
 class RunCodeRequest(BaseModel):
     compile_timeout: float = Field(10, description='compile timeout for compiled languages')
     run_timeout: float = Field(10, description='code run timeout')
+    memory_limit_MB: int = Field(1024, description='maximum memory allowed in megabytes')
     code: str = Field(..., examples=['print("hello")'], description='the code to run')
     stdin: Optional[str] = Field(None, examples=[''], description='optional string to pass into stdin')
     language: Language = Field(..., examples=['python'], description='the language or execution mode to run the code')
@@ -105,7 +106,7 @@ async def run_code(request: RunCodeRequest):
     resp = RunCodeResponse(status=RunStatus.Success, message='', executor_pod_name=os.environ.get('MY_POD_NAME'))
     try:
         logger.debug(
-            f'start processing {request.language} request with code ```\n{request.code[:100]}\n``` and files {list(request.files.keys())}...'
+            f'start processing {request.language} request with code ```\n{request.code[:100]}\n``` and files {list(request.files.keys())}...(memory_limit: {request.memory_limit_MB}MB)'
         )
         result = await CODE_RUNNERS[request.language](CodeRunArgs(**request.model_dump()))
 
