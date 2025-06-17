@@ -114,14 +114,16 @@ async def run_commands(compile_command: Optional[str], run_command: str, cwd: st
                 os.setuid(kwargs.get('set_uid'))
         
         # Apply memory limit using resource module
-        _, hard_memory_limit_AS = resource.getrlimit(resource.RLIMIT_AS)
-        _, hard_memory_limit_DATA = resource.getrlimit(resource.RLIMIT_DATA)
-        soft_memory_limit = args.memory_limit_MB * 1024 * 1024
-        resource.setrlimit(resource.RLIMIT_AS, (soft_memory_limit, hard_memory_limit_AS))
-        resource.setrlimit(resource.RLIMIT_DATA, (soft_memory_limit, hard_memory_limit_DATA))
-        if platform.uname().system != "Darwin":
-            _, hard_memory_limit_STACK = resource.getrlimit(resource.RLIMIT_STACK)
-            resource.setrlimit(resource.RLIMIT_STACK, (soft_memory_limit, hard_memory_limit_STACK))
+    if args.memory_limit_MB > 0:
+        def preexec_fn():
+            _, hard_memory_limit_AS = resource.getrlimit(resource.RLIMIT_AS)
+            _, hard_memory_limit_DATA = resource.getrlimit(resource.RLIMIT_DATA)
+            soft_memory_limit = args.memory_limit_MB * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (soft_memory_limit, hard_memory_limit_AS))
+            resource.setrlimit(resource.RLIMIT_DATA, (soft_memory_limit, hard_memory_limit_DATA))
+            if platform.uname().system != "Darwin":
+                _, hard_memory_limit_STACK = resource.getrlimit(resource.RLIMIT_STACK)
+                resource.setrlimit(resource.RLIMIT_STACK, (soft_memory_limit, hard_memory_limit_STACK))
         
         if compile_command is not None:
             compile_res = await run_command_bare(compile_command,
