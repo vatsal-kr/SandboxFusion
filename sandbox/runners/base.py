@@ -22,6 +22,8 @@ from typing import Dict, List, Optional
 
 import psutil
 import structlog
+import platform
+import resource
 
 from sandbox.configs.run_config import RunConfig
 from sandbox.runners.isolation import tmp_cgroup, tmp_netns, tmp_overlayfs
@@ -104,13 +106,25 @@ async def run_commands(compile_command: Optional[str], run_command: str, cwd: st
     run_res = None
 
     if config.sandbox.isolation == 'none':
-        preexec_fn = None
+        preexec_steps = []
         if kwargs.get('set_uid'):
             set_permissions_recursively(cwd, 0o777)
-
-            def preexec_fn():
-                os.setuid(kwargs.get('set_uid'))
-
+            preexec_steps.append(lambda: os.setuid(kwargs.get('set_uid')))
+        
+        # Apply memory limit using resource module
+        if args.memory_limit_MB > 0:
+            def memory_limit_preexec():
+                _, hard_memory_limit_AS = resource.getrlimit(resource.RLIMIT_AS)
+                _, hard_memory_limit_DATA = resource.getrlimit(resource.RLIMIT_DATA)
+                soft_memory_limit = args.memory_limit_MB * 1024 * 1024
+                resource.setrlimit(resource.RLIMIT_AS, (soft_memory_limit, hard_memory_limit_AS))
+                resource.setrlimit(resource.RLIMIT_DATA, (soft_memory_limit, hard_memory_limit_DATA))
+                if platform.uname().system != "Darwin":
+                    _, hard_memory_limit_STACK = resource.getrlimit(resource.RLIMIT_STACK)
+                    resource.setrlimit(resource.RLIMIT_STACK, (soft_memory_limit, hard_memory_limit_STACK))
+            preexec_steps.insert(0, memory_limit_preexec)
+        preexec_fn = lambda: [step() for step in preexec_steps] if preexec_steps else None
+        
         if compile_command is not None:
             compile_res = await run_command_bare(compile_command,
                                                  args.compile_timeout,

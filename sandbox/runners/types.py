@@ -37,6 +37,7 @@ class CodeRunArgs(BaseModel):
     files: Dict[str, Optional[str]] = {}
     compile_timeout: float = 10
     run_timeout: float = 10
+    memory_limit_MB: int = -1
     stdin: Optional[str] = None
     fetch_files: List[str] = []
 
@@ -57,6 +58,7 @@ class RunJupyterRequest(BaseModel):
         description='list of code blocks to run in jupyter notebook')
     cell_timeout: float = Field(0, description='max run time for each of the cells')
     total_timeout: float = Field(45, description='max run time for all the cells')
+    memory_limit_MB: int = Field(-1, description='maximum memory allowed in megabytes')
     kernel: Literal['python3'] = 'python3'
     files: Dict[str, str] = Field({}, description='a dict from file path to base64 encoded file content')
     fetch_files: List[str] = Field([], description='a list of file paths to fetch after code execution')
