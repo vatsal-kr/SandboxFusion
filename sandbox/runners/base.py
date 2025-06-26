@@ -67,8 +67,19 @@ async def run_command_bare(command: str | List[str],
                                                       },
                                                       preexec_fn=preexec_fn)
         if stdin is not None:
-            p.stdin.write(stdin.encode())
-        p.stdin.close()
+            try:
+                if p.stdin:
+                    p.stdin.write(stdin.encode())
+                    p.stdin.flush()
+                else:
+                    logger.warning("Attempted to write to stdin, but stdin is closed.")
+            except Exception as e:
+                logger.exception(f"Failed to write to stdin: {e}")
+        if p.stdin:
+            try:
+                p.stdin.close()
+            except Exception as e:
+                logger.warning(f"Failed to close stdin: {e}")
         start_time = time.time()
         try:
             await asyncio.wait_for(p.wait(), timeout=timeout)
