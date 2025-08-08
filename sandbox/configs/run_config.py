@@ -23,13 +23,10 @@ logger = structlog.stdlib.get_logger()
 
 
 class RunConfig(BaseModel):
-
     class DatasetConfig(BaseModel):
-
         class DataBase(BaseModel):
-
             class Backend(BaseModel):
-                type: Literal['mysql', 'none']
+                type: Literal["mysql", "none"]
                 user: Optional[str] = None
                 password: Optional[str] = None
                 psm: Optional[str] = None
@@ -37,18 +34,16 @@ class RunConfig(BaseModel):
                 port: Optional[str] = None
 
             class Cache(BaseModel):
-
                 class CacheSourceLocal(BaseModel):
-                    type: Literal['local']
+                    type: Literal["local"]
                     path: str
 
                 class CacheSourceMysql(BaseModel):
-
                     class MysqlTable(BaseModel):
                         name: str
                         columns: List[str]
 
-                    type: Literal['mysql']
+                    type: Literal["mysql"]
                     tables: List[MysqlTable]
 
                 # memory / local db location
@@ -67,15 +62,16 @@ class RunConfig(BaseModel):
         max_runner_concurrency: int = 0
         cpu_runner_url: Optional[str] = None
         gpu_runner_url: Optional[str] = None
-        default_dataset_table: str = 'code_eval_${dataset_id}'
+        default_dataset_table: str = "code_eval_${dataset_id}"
         registry: List[RegistryItem] = []
 
     class SandboxConfig(BaseModel):
-        '''
+        """
         none: no isolation, cleanup_process and restore_bash are best effort for correctness
         lite: handcrafted overlayfs + chroot + cgroups isolation, fast (< 100 ms overhead)
-        '''
-        isolation: Literal['none', 'lite']
+        """
+
+        isolation: Literal["none", "lite"]
         set_uid: Optional[int] = None
         cleanup_process: bool
         restore_bash: bool
@@ -90,22 +86,20 @@ class RunConfig(BaseModel):
     common: Common
 
     def __init__(self):
-        config_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), f'{os.getenv("SANDBOX_CONFIG", "local")}.yaml'))
+        config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), f"{os.getenv('SANDBOX_CONFIG', 'local')}.yaml"))
         # logger.info(f'loading config from {config_path}')
         with open(config_path) as f:
             data = yaml.safe_load(f)
         super().__init__(**data)
 
     # moved sigleton logic here until type inference is fixed
-    _instance: Optional['RunConfig'] = None
+    _instance: Optional["RunConfig"] = None
 
     @classmethod
-    def get_instance_sync(cls, *args, **kwargs) -> 'RunConfig':
-        if not cls.__private_attributes__['_instance'].default:
+    def get_instance_sync(cls, *args, **kwargs) -> "RunConfig":
+        if not cls.__private_attributes__["_instance"].default:
             self = cls(*args, **kwargs)
-            assert not hasattr(
-                self, 'async_init'), f'class {cls.__name__} has async_init function, init it with get_instance_async.'
-            cls.__private_attributes__['_instance'].default = self
-            logger.debug('singleton class initialized', name=cls.__name__)
-        return cls.__private_attributes__['_instance'].default
+            assert not hasattr(self, "async_init"), f"class {cls.__name__} has async_init function, init it with get_instance_async."
+            cls.__private_attributes__["_instance"].default = self
+            logger.debug("singleton class initialized", name=cls.__name__)
+        return cls.__private_attributes__["_instance"].default

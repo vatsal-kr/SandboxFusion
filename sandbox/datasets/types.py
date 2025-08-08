@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from sandbox.configs.run_config import RunConfig
-from sandbox.runners.types import CommandRunResult, CommandRunStatus, Language  # nopycln: import
-from sandbox.server.sandbox_api import RunCodeRequest, RunCodeResponse, RunStatus  # nopycln: import
+from sandbox.runners.types import Language  # nopycln: import
+from sandbox.server.sandbox_api import RunCodeResponse  # nopycln: import
 
 server_config = RunConfig.get_instance_sync()
 
@@ -39,16 +39,14 @@ class Prompt(BaseModel):
 
 
 class TestConfig(BaseModel):
-    '''
+    """
     custom_extract_logic: a piece of python code that calls `submit_code_blocks(cbs)` to extract custom code
                           cbs: List[CodeBlock], CodeBlock(priority=40, code='xxx', language='xxx')
                           priority: fenced = 30, incomplete fenced = 20, heuristic = 10
-    '''
+    """
+
     __test__ = False
-    dataset_type: Optional[str] = Field(
-        None,
-        examples=[None],
-        description='the dataset class used to process, only works when the dataset id is not registered.')
+    dataset_type: Optional[str] = Field(None, examples=[None], description="the dataset class used to process, only works when the dataset id is not registered.")
     language: Optional[Language] = None
     locale: Optional[str] = None
     is_fewshot: Optional[bool] = None
@@ -78,7 +76,7 @@ class EvalResult(BaseModel):
     full_code: Optional[str] = None
     test_code: Optional[str] = None
     tests: List[EvalTestCase]
-    extracted_type: Optional[Literal['fenced', 'incomplete_fenced', 'heuristic', 'empty']] = None
+    extracted_type: Optional[Literal["fenced", "incomplete_fenced", "heuristic", "empty"]] = None
     extra: Optional[Dict] = None
 
 
@@ -118,7 +116,6 @@ class GetMetricsFunctionResult(BaseModel):
 
 
 class CodingDataset(ABC):
-
     @classmethod
     def get_table_name(cls, dataset_id: str) -> str:
         for registry in server_config.dataset.registry:
@@ -128,29 +125,25 @@ class CodingDataset(ABC):
                 return registry.dataset_tables[dataset_id]
             else:
                 return Template(server_config.dataset.default_dataset_table).substitute(dataset_id=dataset_id)
-        raise RuntimeError(f'class {cls.__name__} not in config registry!')
+        raise RuntimeError(f"class {cls.__name__} not in config registry!")
 
     @classmethod
-    async def get_ids(cls, request: GetPromptsRequest) -> List[int | str]:
-        prompts = await cls.get_prompts(request)
+    def get_ids(cls, request: GetPromptsRequest) -> List[int | str]:
+        prompts = cls.get_prompts(request)
         return [p.id for p in prompts]
 
     @classmethod
     @abstractmethod
-    async def get_num_problems(self, dataset_id: str) -> int:
-        ...
+    def get_num_problems(self, dataset_id: str) -> int: ...
 
     @classmethod
     @abstractmethod
-    async def get_prompts(self, request: GetPromptsRequest) -> List[Prompt]:
-        ...
+    def get_prompts(self, request: GetPromptsRequest) -> List[Prompt]: ...
 
     @classmethod
     @abstractmethod
-    async def get_prompt_by_id(self, request: GetPromptByIdRequest) -> Prompt:
-        ...
+    def get_prompt_by_id(self, request: GetPromptByIdRequest) -> Prompt: ...
 
     @classmethod
     @abstractmethod
-    async def evaluate_single(self, request: SubmitRequest) -> EvalResult:
-        ...
+    def evaluate_single(self, request: SubmitRequest) -> EvalResult: ...

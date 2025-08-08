@@ -12,22 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sandbox.runners.cuda import GPU_RUNNERS
-from sandbox.runners.jupyter import run_jupyter
 from sandbox.runners.major import MAJOR_RUNNERS
 from sandbox.runners.minor import MINOR_RUNNERS
 from sandbox.runners.types import (  # nopycln: import
-    CellRunResult, CodeRunArgs, CodeRunResult, CommandRunResult, CommandRunStatus, Language, RunJupyterRequest,
+    CodeRunArgs,
+    CodeRunResult,
+    CommandRunResult,
+    CommandRunStatus,
+    Language,
 )
 
 # TODO: warning on name overwrite
 CODE_RUNNERS = {
     **MAJOR_RUNNERS,
     **MINOR_RUNNERS,
-    **GPU_RUNNERS,
 }
 
 __all__ = [
-    'CODE_RUNNERS', 'CodeRunArgs', 'CodeRunResult', 'CommandRunResult', 'CommandRunStatus', 'RunJupyterRequest',
-    'Language', 'CellRunResult', 'run_jupyter'
+    "CODE_RUNNERS",
+    "CodeRunArgs",
+    "CodeRunResult",
+    "CommandRunResult",
+    "CommandRunStatus",
+    "Language",
 ]

@@ -23,44 +23,49 @@ config = RunConfig.get_instance_sync()
 
 
 def configure_logging(trace_file=None):
-
     def filter_keys(_, __, event_dict):
-        event_dict.pop('_from_structlog', None)
-        event_dict.pop('_record', None)
+        event_dict.pop("_from_structlog", None)
+        event_dict.pop("_record", None)
         return event_dict
 
-    structlog.configure(processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-    ],
-                        logger_factory=structlog.stdlib.LoggerFactory(),
-                        context_class=dict)
+    structlog.configure(
+        processors=[
+            structlog.stdlib.filter_by_level,
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        context_class=dict,
+    )
 
     handlers = []
 
     stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setLevel(logging.WARNING)
     stdout_handler.setFormatter(
         structlog.stdlib.ProcessorFormatter(
-            processors=[filter_keys, structlog.dev.ConsoleRenderer(colors=config.common.logging_color)],))
+            processors=[filter_keys, structlog.dev.ConsoleRenderer(colors=config.common.logging_color)],
+        )
+    )
     handlers.append(stdout_handler)
 
     if isinstance(trace_file, str):
-        file_handler = logging.FileHandler(trace_file, 'w+')
-        file_handler.setLevel(logging.DEBUG)
+        file_handler = logging.FileHandler(trace_file, "w+")
+        file_handler.setLevel(logging.WARNING)
         file_handler.setFormatter(
-            structlog.stdlib.ProcessorFormatter(processors=[filter_keys,
-                                                            structlog.processors.JSONRenderer()],))
+            structlog.stdlib.ProcessorFormatter(
+                processors=[filter_keys, structlog.processors.JSONRenderer()],
+            )
+        )
         handlers.append(file_handler)
 
-    logging.basicConfig(level=logging.DEBUG, handlers=handlers)
-    logging.getLogger('aiosqlite').setLevel(logging.CRITICAL)
-    logging.getLogger('databases').setLevel(logging.CRITICAL)
+    logging.basicConfig(level=logging.WARNING, handlers=handlers)
+    logging.getLogger("aiosqlite").setLevel(logging.CRITICAL)
+    logging.getLogger("databases").setLevel(logging.CRITICAL)
     logging.getLogger("uvicorn.access").handlers = []
     logging.getLogger("uvicorn.access").propagate = False

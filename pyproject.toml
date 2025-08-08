@@ -7,8 +7,6 @@ authors = [
     "chenli.cxx <chenli.cxx@bytedance.com>",
     "xinshulin <xinshulin@bytedance.com>"
 ]
-readme = "README.md"
-
 [tool.poetry.dependencies]
 python = "^3.11"
 pydantic = ">=2.4.0,<2.7.0"

@@ -12,30 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
 
 import structlog
-from fastapi import HTTPException
 
 from sandbox.configs.run_config import RunConfig
-from sandbox.datasets.types import EvalTestCase, GeneralStdioTest, RunStatus, TestConfig
+from sandbox.datasets.types import EvalTestCase, GeneralStdioTest, TestConfig
 from sandbox.runners.types import compile_languages
+from sandbox.server.sandbox_api import RunCodeRequest, run_code
 from sandbox.utils.common import truncate_str
-from sandbox.utils.execution import max_concurrency
-from sandbox.utils.sandbox_client import RunCodeRequest, run_code_in_sandbox, run_code_in_sandbox_w_retry
+from sandbox.utils.logging import configure_logging
 
+configure_logging()
 sandbox_config = RunConfig.get_instance_sync()
+
 logger = structlog.stdlib.get_logger()
-
-
-async def check_auto_test_case(code: str, config: TestConfig) -> EvalTestCase:
-    '''
-    auto test: run the code and check if the return value is 0
-    '''
-    result = await run_code_in_sandbox(RunCodeRequest(code=code, language=config.language))
-    return EvalTestCase(passed=result.status == RunStatus.Success, exec_info=result)
 
 
 def is_float(s):
@@ -50,28 +43,19 @@ def float_equal(a, b, rel_tol=1e-5):
     return abs(a - b) / max(abs(b), 1e-10) < rel_tol
 
 
-async def check_stdio_test_case(code: str, case: GeneralStdioTest, config: TestConfig, lower_cmp=True) -> EvalTestCase:
+def check_stdio_test_case(code: str, case: GeneralStdioTest, config: TestConfig, lower_cmp=True) -> EvalTestCase:
     if config.language in compile_languages:
-        result = await run_code_in_sandbox_w_retry(
-            RunCodeRequest(code=code,
-                           language=config.language,
-                           stdin=case.input['stdin'],
-                           compile_timeout=config.compile_timeout or 10,
-                           run_timeout=config.run_timeout or 10))
+        result = run_code(RunCodeRequest(code=code, language=config.language, stdin=case.input["stdin"], compile_timeout=config.compile_timeout or 10, run_timeout=config.run_timeout or 10))
     else:
-        result = await run_code_in_sandbox_w_retry(
-            RunCodeRequest(code=code,
-                           language=config.language,
-                           stdin=case.input['stdin'],
-                           run_timeout=config.run_timeout or 20))
+        result = run_code(RunCodeRequest(code=code, language=config.language, stdin=case.input["stdin"], run_timeout=config.run_timeout or 20))
     fail_case = EvalTestCase(passed=False, exec_info=result, test_info=case.model_dump())
-    if result.status != 'Success':
+    if result.status != "Success":
         return fail_case
-    result_lines = result.run_result.stdout.strip().split('\n')
-    expected_lines = case.output['stdout'].strip().split('\n')
-    if len(result_lines) - len(expected_lines) == 1 and result_lines[-1] == '':
+    result_lines = result.run_result.stdout.strip().split("\n")
+    expected_lines = case.output["stdout"].strip().split("\n")
+    if len(result_lines) - len(expected_lines) == 1 and result_lines[-1] == "":
         result_lines = result_lines[:-1]
-    if len(expected_lines) - len(result_lines) == 1 and expected_lines[-1] == '':
+    if len(expected_lines) - len(result_lines) == 1 and expected_lines[-1] == "":
         expected_lines = expected_lines[:-1]
     if len(result_lines) != len(expected_lines):
         return fail_case
@@ -84,7 +68,7 @@ async def check_stdio_test_case(code: str, case: GeneralStdioTest, config: TestC
                 if float_equal(float(rl), float(el)):
                     continue
             return fail_case
-    if not config.extra.get('return_full_case', False):
+    if not config.extra.get("return_full_case", False):
         for k in case.input:
             case.input[k] = truncate_str(case.input[k])
         for k in case.output:
@@ -92,51 +76,47 @@ async def check_stdio_test_case(code: str, case: GeneralStdioTest, config: TestC
     return EvalTestCase(passed=True, exec_info=result, test_info=case.model_dump())
 
 
-async def check_stdio_test_cases(code: str,
-                                 cases: List[GeneralStdioTest],
-                                 config: TestConfig,
-                                 lower_cmp=True) -> List[EvalTestCase]:
+def check_stdio_test_cases(code: str, cases: List[GeneralStdioTest], config: TestConfig, lower_cmp=True) -> List[EvalTestCase]:
     result = []
     for case in cases:
-        outcome = await check_stdio_test_case(code, case, config, lower_cmp)
+        outcome = check_stdio_test_case(code, case, config, lower_cmp)
         result.append(outcome)
         if not outcome.passed:
             break
     return result
 
 
-async def check_stdio_test_cases_parallel(code: str,
-                                          cases: List[GeneralStdioTest],
-                                          config: TestConfig,
-                                          lower_cmp=True) -> List[EvalTestCase]:
-    result = []
-    tasks: List[asyncio.Task[EvalTestCase]] = []
+def check_stdio_test_cases_parallel(code: str, cases: List[GeneralStdioTest], config: TestConfig, lower_cmp=True) -> List[EvalTestCase]:
+    """
+    Run `check_stdio_test_case` across multiple threads in parallel using a ThreadPoolExecutor.
+    """
+    results: List[EvalTestCase] = []
 
-    check_stdio_test_case_limited = check_stdio_test_case
-    if sandbox_config.dataset.max_runner_concurrency > 0:
-        check_stdio_test_case_limited = max_concurrency(
-            sandbox_config.dataset.max_runner_concurrency)(check_stdio_test_case)
+    # Restrict concurrency from config (or default to number of cases)
+    max_workers = sandbox_config.dataset.max_runner_concurrency or len(cases)
+    run_all = config.extra.get("run_all_cases", False)
 
-    for case in cases:
-        task = asyncio.create_task(check_stdio_test_case_limited(code, case, config, lower_cmp))
-        tasks.append(task)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all jobs
+        future_to_case = {executor.submit(check_stdio_test_case, code, case, config, lower_cmp): case for case in cases}
 
-    run_all_cases = config.extra.get("run_all_cases", False)
+        for future in as_completed(future_to_case):
+            try:
+                outcome = future.result()
+            except Exception as e:
+                raise RuntimeError(f"Failed to check stdio test case: {e}")
 
-    for task in tasks:
-        try:
-            outcome = await task
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f'Failed to check stdio test case: {e}')
-        result.append(outcome)
+            results.append(outcome)
 
-        if not run_all_cases and not outcome.passed:
-            for remaining_task in tasks:
-                if not remaining_task.done():
-                    remaining_task.cancel()
-            break
+            # Early stop behavior
+            if not run_all and not outcome.passed:
+                # Cancel all outstanding futures
+                for future_pending in future_to_case:
+                    if not future_pending.done():
+                        future_pending.cancel()
+                break
 
-    return result
+    return results
 
 
 def parse_jest_cases(report_data: str) -> List[Dict[str, Any]]:
@@ -147,18 +127,11 @@ def parse_jest_cases(report_data: str) -> List[Dict[str, Any]]:
 
     test_cases = []
 
-    for test_suite in report['testResults']:
-        file_path = test_suite['testFilePath']
+    for test_suite in report["testResults"]:
+        file_path = test_suite["testFilePath"]
 
-        for test_case in test_suite['testResults']:
-            result = {
-                'passed': test_case['status'] == 'passed',
-                'full_name': test_case['fullName'],
-                'file': file_path,
-                'suite': ' > '.join(test_case['ancestorTitles']),
-                'test': test_case['title'],
-                'failure_messages': test_case['failureMessages']
-            }
+        for test_case in test_suite["testResults"]:
+            result = {"passed": test_case["status"] == "passed", "full_name": test_case["fullName"], "file": file_path, "suite": " > ".join(test_case["ancestorTitles"]), "test": test_case["title"], "failure_messages": test_case["failureMessages"]}
             test_cases.append(result)
 
     return test_cases
