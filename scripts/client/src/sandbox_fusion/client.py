@@ -119,7 +119,7 @@ def summary_run_code_result(result: RunCodeResponse, mapping: SummaryMapping) ->
             raise Exception(f'invalid sandbox result: no return code with status {result.compile_result.status}')
         if return_code != 0:
             return mapping.CompileFailed or mapping.Failed
-        raise Exception(f'invalid sandbox result: compiled succesfully with no run result')
+        raise Exception('invalid sandbox result: compiled succesfully with no run result')
     if result.run_result.status == CommandRunStatus.TimeLimitExceeded:
         return mapping.RunTimeout or mapping.Failed
     return_code = result.run_result.return_code

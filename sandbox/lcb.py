@@ -1,4 +1,5 @@
 import argparse
+import ast
 import logging
 import os
 import pickle
@@ -23,21 +24,10 @@ with open("/root/sandbox/secrets.toml", "rb") as f:
 HF_TOKEN = secrets["HF_KEY"]
 
 
-def _quality_filter(example):
-    return (
-        len(example["test_cases"]) >= 5
-        and example["true_positive_rate"]
-        and example["true_negative_rate"]
-        and example["true_positive_rate"] >= 0.9
-        and example["true_negative_rate"] >= 0.9
-        and example["time_limit"] <= 3000
-    )
-
-
 def create_SubmitRequest_data(example):
     example["formatted_cases"] = [
         {
-            "id": example["id"],
+            "id": example["question_id"],
             "test": [
                 {
                     "input": {"stdin": case["input"]},
@@ -50,10 +40,10 @@ def create_SubmitRequest_data(example):
     return example
 
 
-def restore_completions(example, completions_dct, language, generator):
-    example["completions"] = completions_dct[example["id"]]
-    example["language"] = language
-    example["generator"] = generator
+def restore_completions_and_tests(example, completions_dct):
+    example["test_cases"] = ast.literal_eval(example["private_test_cases"]) + ast.literal_eval(example["public_test_cases"])
+    example["completions"] = completions_dct[example["question_id"]]
+    example["language"] = "python"
     return example
 
 
@@ -70,7 +60,7 @@ def create_test_config(formatted_cases: Dict, language: str):
 
 def _submit_single_completion_single_test(idx, completion, config) -> EvalResult:
     try:
-        result = submit(SubmitRequest(dataset="ccplus", id=idx, completion=completion, config=config))
+        result = submit(SubmitRequest(dataset="lcb", id=idx, completion=completion, config=config))
     except Exception:
         log.error(f"Error submitting completion at index {idx}: {traceback.format_exc()}")
         return None
@@ -79,15 +69,14 @@ def _submit_single_completion_single_test(idx, completion, config) -> EvalResult
 
 def load_completions_and_tests(args):
     # loading test cases
-    test_data = load_dataset("parquet", data_files="/root/CCPlus_1x/*.parquet", split="train")
-    test_data = test_data.filter(_quality_filter)
-    with open(f"/root/CCPlus_completions/{args.model_name}/{args.language}/completions.pkl", "rb") as f:
+    test_data = load_dataset("livecodebench/code_generation", split="test")
+    with open(f"LCB_completions/{args.model_name}/completions.pkl", "rb") as f:
         completions_dct = pickle.load(f)
 
     test_data = test_data.map(
-        restore_completions,
+        restore_completions_and_tests,
         num_proc=NUM_WORKERS,
-        fn_kwargs={"completions_dct": completions_dct, "language": args.language, "generator": args.model_name},
+        fn_kwargs={"completions_dct": completions_dct},
         desc="Restoring completions and test cases",
     )
     test_data = test_data.map(
@@ -95,22 +84,23 @@ def load_completions_and_tests(args):
         num_proc=NUM_WORKERS,
         desc="Formatting test cases for SubmitRequest",
     )
-    test_data = test_data.select_columns(["id", "completions", "formatted_cases", "language", "generator"])
+    test_data = test_data.select_columns(["question_id", "completions", "formatted_cases", "language"])
     test_data = test_data.select(range(10))
     return test_data
 
 
-def evaluate():
+def evaluate(args):
     data = load_completions_and_tests(args)
     log.info(f"Loaded {len(data)} examples")
     all_formatted_cases: List[List[Dict]] = list(data["formatted_cases"])  # Size [num_prompts, num_tests_per_prompt]
     all_completions: List[List[str]] = list(data["completions"])  # Size [num_prompts, num_completions_per_prompt]
     all_languages: List[str] = list(data["language"])  # Size: [num_prompts]
-    prompt_indices: List[str] = list(data["id"])  # Size: [num_prompts]
+    prompt_indices: List[str] = list(data["question_id"])  # Size: [num_prompts]
     log.info(f"all_formatted_cases shape: ({len(all_formatted_cases), len(all_formatted_cases[0])})")
     log.info(f"all_completions shape: ({len(all_completions), len(all_completions[0])})")
     log.info(f"all_languages shape: {len(all_languages)}")
     log.info(f"prompt_indices shape: {len(prompt_indices)}")
+    # Will contain `num_tests_per_prompt` entries
 
     iterator = [
         (single_test, single_completion, language, prompt_idx, completion_idx)
@@ -127,7 +117,7 @@ def evaluate():
 
     results = [None] * len(iterator)
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         future_to_idx = {
             executor.submit(_submit_single_completion_single_test, i, comp, cfg): i
             for i, (comp, cfg) in enumerate(zip(completion_inputs, config_inputs))
@@ -136,7 +126,7 @@ def evaluate():
             i = future_to_idx[fut]
             results[i] = fut.result()
 
-    results_per_prompt_per_completion: Dict[str, Dict[int, List[str]]] = {}
+    results_per_prompt_per_completion = {}
     for meta, result in zip(meta_indices, results):
         prompt_idx, completion_idx = meta
         if prompt_idx not in results_per_prompt_per_completion:
@@ -148,7 +138,7 @@ def evaluate():
         else:
             results_per_prompt_per_completion[prompt_idx][completion_idx].append(result.accepted)
 
-    results_per_prompt: Dict[str, Dict[str, List[int]]] = {}
+    results_per_prompt = {}
     for prompt_idx, inner_dict in results_per_prompt_per_completion.items():
         results_per_prompt[prompt_idx] = {
             "num_passed": [sum(results_by_completion) for results_by_completion in inner_dict.values()],
@@ -161,18 +151,14 @@ def evaluate():
     data: Dataset = data.add_column("num_failed", [results_per_prompt[idx]["num_failed"] for idx in prompt_indices])
     data: Dataset = data.add_column("final_verdict", [results_per_prompt[idx]["final_verdict"] for idx in prompt_indices])
     data: Dataset = data.add_column("atleast_one_passing_all", [results_per_prompt[idx]["atleast_one_passing_all"] for idx in prompt_indices])
-    data = data.select_columns(["id", "num_passed", "num_failed", "final_verdict", "atleast_one_passing_all", "language", "generator"])
-
-    data.push_to_hub(f"CodeShield/ccp_results_{args.model_name}_{args.language}", private=True, token=HF_TOKEN)
+    data = data.select_columns(["question_id", "num_passed", "num_failed", "final_verdict", "atleast_one_passing_all"])
+    data.push_to_hub(f"CodeShield/w2s_execution_results_{args.model_name}", private=True, token=HF_TOKEN)
 
 
 if __name__ == "__main__":
     log.setLevel(logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, help="Name of the model to use")
-    parser.add_argument("--language", type=str, help="Programming language to use")
     args = parser.parse_args()
     args.model_name = args.model_name.replace(".", "_")
-    args.language = args.language.lower()
-    evaluate()
-    log.info("Completed")
+    evaluate(args)

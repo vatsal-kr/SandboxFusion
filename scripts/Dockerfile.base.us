@@ -122,12 +122,9 @@ RUN cd ./runtime/python && bash install-python-runtime.sh us
 ENV QT_QPA_PLATFORM=offscreen
 ENV OMP_NUM_THREADS=2
 
-# COPY ./ /root/sandbox
-# WORKDIR /root/sandbox
-COPY ./pyproject.toml /root/pyproject.toml
-WORKDIR /root/
+COPY ./ /root/sandbox
+WORKDIR /root/sandbox
 RUN poetry config virtualenvs.create false \
     # TODO: find out why poetry throws error without this
     && touch /root/miniconda3/pyvenv.cfg \
     && poetry install
-RUN echo ". /root/miniconda3/etc/profile.d/conda.sh" >> /root/.bashrc

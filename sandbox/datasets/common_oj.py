@@ -27,7 +27,7 @@ from sandbox.datasets.types import (
 )
 from sandbox.utils.common import ensure_json
 from sandbox.utils.extraction import default_extract_helper
-from sandbox.utils.testing import check_stdio_test_cases_parallel
+from sandbox.utils.testing import check_stdio_test_case, check_stdio_test_cases_parallel
 
 
 class CommonOJDataset(CodingDataset):
@@ -80,5 +80,8 @@ class CommonOJDataset(CodingDataset):
         row = get_row_by_id_in_table(request, cls.get_table_name(request.dataset), columns=["test"])
         cases = [GeneralStdioTest(**case) for case in ensure_json(row, "test")]
         code = default_extract_helper(request.completion, request.config.language, request.config.custom_extract_logic)
-        outcomes = check_stdio_test_cases_parallel(code, cases, request.config)
+        if len(cases) == 1 and request.config.extra.get("run_all_cases", False):
+            outcomes = [check_stdio_test_case(code, cases[0], request.config)]
+        else:
+            outcomes = check_stdio_test_cases_parallel(code, cases, request.config)
         return EvalResult(id=request.id, accepted=all([o.passed for o in outcomes]), extracted_code=code, tests=outcomes)
