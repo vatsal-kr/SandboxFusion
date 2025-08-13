@@ -25,9 +25,9 @@ from sandbox.server.sandbox_api import RunCodeRequest, run_code
 from sandbox.utils.common import truncate_str
 from sandbox.utils.logging import configure_logging
 
-configure_logging()
 sandbox_config = RunConfig.get_instance_sync()
 
+configure_logging()
 logger = structlog.stdlib.get_logger()
 
 
@@ -45,7 +45,15 @@ def float_equal(a, b, rel_tol=1e-5):
 
 def check_stdio_test_case(code: str, case: GeneralStdioTest, config: TestConfig, lower_cmp=True) -> EvalTestCase:
     if config.language in compile_languages:
-        result = run_code(RunCodeRequest(code=code, language=config.language, stdin=case.input["stdin"], compile_timeout=config.compile_timeout or 10, run_timeout=config.run_timeout or 10))
+        result = run_code(
+            RunCodeRequest(
+                code=code,
+                language=config.language,
+                stdin=case.input["stdin"],
+                compile_timeout=config.compile_timeout or 10,
+                run_timeout=config.run_timeout or 10,
+            )
+        )
     else:
         result = run_code(RunCodeRequest(code=code, language=config.language, stdin=case.input["stdin"], run_timeout=config.run_timeout or 20))
     fail_case = EvalTestCase(passed=False, exec_info=result, test_info=case.model_dump())
@@ -131,7 +139,14 @@ def parse_jest_cases(report_data: str) -> List[Dict[str, Any]]:
         file_path = test_suite["testFilePath"]
 
         for test_case in test_suite["testResults"]:
-            result = {"passed": test_case["status"] == "passed", "full_name": test_case["fullName"], "file": file_path, "suite": " > ".join(test_case["ancestorTitles"]), "test": test_case["title"], "failure_messages": test_case["failureMessages"]}
+            result = {
+                "passed": test_case["status"] == "passed",
+                "full_name": test_case["fullName"],
+                "file": file_path,
+                "suite": " > ".join(test_case["ancestorTitles"]),
+                "test": test_case["title"],
+                "failure_messages": test_case["failureMessages"],
+            }
             test_cases.append(result)
 
     return test_cases

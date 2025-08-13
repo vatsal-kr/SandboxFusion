@@ -92,7 +92,9 @@ def parse_run_status(result: CodeRunResult) -> Tuple[RunStatus, str]:
 def run_code(request: RunCodeRequest):
     resp = RunCodeResponse(status=RunStatus.Success, message="", executor_pod_name=os.environ.get("MY_POD_NAME"))
     try:
-        logger.debug(f"start processing {request.language} request with code ```\n{request.code[:100]}\n``` and files {list(request.files.keys())}...(memory_limit: {request.memory_limit_MB}MB)")
+        logger.debug(
+            f"start processing {request.language} request with code ```\n{request.code[:100]}\n``` and files {list(request.files.keys())}...(memory_limit: {request.memory_limit_MB}MB)"
+        )
         result = CODE_RUNNERS[request.language](CodeRunArgs(**request.model_dump()))
 
         resp.compile_result = result.compile_result

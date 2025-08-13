@@ -24,7 +24,6 @@ from sandbox.runners.types import Language
 from sandbox.utils.logging import configure_logging
 
 configure_logging()
-
 logger = structlog.stdlib.get_logger()
 
 NullableLang = Language | Literal[""]
@@ -64,7 +63,6 @@ language_to_aliases = {
     "nodejs": ["javascript", "Javascript", "JavaScript", "JS", "js"],
     "go": ["go", "Go"],
     "java": ["java", "Java"],
-    "php": ["php"],
     "csharp": ["csharp", "c#", "C#"],
     "bash": ["bash", "Bash", "BASH", "sh", "shell"],
     "typescript": ["typescript"],
@@ -77,7 +75,6 @@ language_to_aliases = {
     "perl": ["perl", "Perl", "PERL"],
     "R": ["R", "r"],
     "ruby": ["ruby", "Ruby"],
-    "rust": ["rust", "Rust", "rs"],
     "scala": ["scala", "Scala"],
     "kotlin": ["kotlin", "Kotlin"],
     "c": ["c", "C"],
@@ -244,7 +241,7 @@ def extract_code_from_freeform_completion(completion: str, language: NullableLan
         logger.debug(f"select first code block for fewshot task: {code_blocks}")
 
     # drop the blocks which the language tag different with target programming language
-    if kwargs.get("exactly_match") == True and language:
+    if kwargs.get("exactly_match") and language:
         other_tag = set(sum([v for k, v in language_to_aliases.items() if k != language], []))
         code_blocks = [b for b in code_blocks if b.language not in other_tag]
 
@@ -266,7 +263,7 @@ def extract_code_from_freeform_completion(completion: str, language: NullableLan
     if kwargs.get("code_block_idx") is not None:
         try:
             completion = code_blocks[kwargs["code_block_idx"]].code.replace("\r", "")
-        except:
+        except Exception:
             completion = ""
     elif first_block_only:
         if code_blocks:
@@ -319,7 +316,9 @@ def extract_code_from_freeform_completion(completion: str, language: NullableLan
     return (completion, extracted_type.value)
 
 
-def extract_code_from_freeform_completion_v2(completion: str, language: NullableLang = "", first_block_only=False, no_removal=False, **kwargs) -> Tuple[str, str]:
+def extract_code_from_freeform_completion_v2(
+    completion: str, language: NullableLang = "", first_block_only=False, no_removal=False, **kwargs
+) -> Tuple[str, str]:
     """
     Arguments:
     - kwargs:
@@ -353,7 +352,7 @@ def extract_code_from_freeform_completion_v2(completion: str, language: Nullable
         logger.debug(f"select first code block for fewshot task: {code_blocks}")
 
     # drop the blocks which the language tag different with target programming language
-    if kwargs.get("exactly_match") == True and language:
+    if kwargs.get("exactly_match") and language:
         target_tag = language_to_aliases.get(language, [])
         code_blocks = [b for b in code_blocks if b.language in target_tag]
 
@@ -375,7 +374,7 @@ def extract_code_from_freeform_completion_v2(completion: str, language: Nullable
     if kwargs.get("code_block_idx") is not None:
         try:
             completion = code_blocks[kwargs["code_block_idx"]].code.replace("\r", "")
-        except:
+        except Exception:
             completion = ""
     elif first_block_only:
         if code_blocks:
@@ -385,7 +384,7 @@ def extract_code_from_freeform_completion_v2(completion: str, language: Nullable
     else:
         completion = "\n\n".join([b.code for b in code_blocks]).replace("\r", "")
 
-    is_ut = kwargs.get("is_ut") == True
+    is_ut = kwargs.get("is_ut")
     if not is_ut:
         completion = postprocess_completion_v2(completion, language, no_removal, completion_bk, **kwargs)
 
@@ -397,7 +396,7 @@ def extract_code_from_freeform_completion_v2(completion: str, language: Nullable
 
 
 def postprocess_completion_v2(completion: str, language: str, no_removal: bool, completion_bk: str, **kwargs) -> str:
-    inner_function_only = kwargs.get("inner_function_only") == True
+    inner_function_only = kwargs.get("inner_function_only")
 
     if language == "python":
         lines = completion.splitlines()
@@ -447,7 +446,7 @@ def postprocess_completion_v2(completion: str, language: str, no_removal: bool, 
                     completion = line + "\n" + completion
     elif language == "go":
         # 一般来说移除 `package main` 语句，部分数据集不要做移除，例如 mbxp
-        if no_removal == False:
+        if not no_removal:
             completion = completion.replace("package main", "")
 
         # Delete the main function from completion, if exists.
@@ -625,7 +624,13 @@ def extract_java_code(completion: str) -> List[str]:
             indices = {k: completion.find(k) for k in ("public ", "interface ", "class ")}
             indices = {k: v for k, v in indices.items() if v != -1}
             first = min(indices, key=indices.get)
-            pattern = patterns["public_class"] if first == "public " else patterns["interface_with_end"] if first == "interface " else patterns["class_with_end"]
+            pattern = (
+                patterns["public_class"]
+                if first == "public "
+                else patterns["interface_with_end"]
+                if first == "interface "
+                else patterns["class_with_end"]
+            )
             code = [re.search(pattern, completion, re.DOTALL).group()]
     except Exception:
         pass
@@ -653,6 +658,12 @@ def get_java_test_assets(code: List[str], test: str) -> Dict[str, str]:
             for item in re.findall(patterns[pattern], c, re.DOTALL):
                 item = item[0]
                 name = re.search(patterns[name_pattern], item, re.DOTALL).group(1)
-                files[f"{name}.java"] = "import org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.*;\n" + "\n".join(imports) + "\n" + item + "\n"
+                files[f"{name}.java"] = (
+                    "import org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.*;\n"
+                    + "\n".join(imports)
+                    + "\n"
+                    + item
+                    + "\n"
+                )
 
     return {k: base64.b64encode(v.encode("utf-8")).decode("utf-8") for k, v in files.items()}

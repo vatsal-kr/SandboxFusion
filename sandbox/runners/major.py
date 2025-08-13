@@ -29,14 +29,15 @@ from sandbox.utils.extraction import find_java_public_class_name
 from sandbox.utils.logging import configure_logging
 
 configure_logging()
-
 logger = structlog.stdlib.get_logger()
 config = RunConfig.get_instance_sync()
 
 
 @cache
 def get_python_rt_env(env_name: str):
-    r = subprocess.run(f'bash -c "source {find_conda_root()}/bin/activate {env_name} && which python"', capture_output=True, text=True, check=True, shell=True)
+    r = subprocess.run(
+        f'bash -c "source {find_conda_root()}/bin/activate {env_name} && which python"', capture_output=True, text=True, check=True, shell=True
+    )
     python_path = os.path.dirname(r.stdout)
     original_paths = os.environ.get("PATH", "").split(":")
     filtered_path = ":".join([p for p in original_paths if "/envs/sandbox/" not in p])

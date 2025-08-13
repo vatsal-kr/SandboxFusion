@@ -31,12 +31,19 @@ from sandbox.utils.execution import cleanup_process, ensure_bash_integrity, kill
 from sandbox.utils.logging import configure_logging
 
 configure_logging()
-
 logger = structlog.stdlib.get_logger()
 config = RunConfig.get_instance_sync()
 
 
-def run_command_bare(command: Union[str, List[str]], timeout: float = 10, stdin: Optional[str] = None, cwd: Optional[str] = None, extra_env: Optional[Dict[str, str]] = None, use_exec: bool = False, preexec_fn=None) -> CommandRunResult:
+def run_command_bare(
+    command: Union[str, List[str]],
+    timeout: float = 10,
+    stdin: Optional[str] = None,
+    cwd: Optional[str] = None,
+    extra_env: Optional[Dict[str, str]] = None,
+    use_exec: bool = False,
+    preexec_fn=None,
+) -> CommandRunResult:
     """Synchronous version of the async run_command_bare."""
     extra_env = extra_env or {}
     env = {**os.environ, **extra_env}
@@ -48,7 +55,17 @@ def run_command_bare(command: Union[str, List[str]], timeout: float = 10, stdin:
             p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, preexec_fn=preexec_fn)
         else:
             # shell mode: pass string
-            p = subprocess.Popen(command, shell=True, executable="/bin/bash", stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env, preexec_fn=preexec_fn)
+            p = subprocess.Popen(
+                command,
+                shell=True,
+                executable="/bin/bash",
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=cwd,
+                env=env,
+                preexec_fn=preexec_fn,
+            )
 
         # Feed stdin if provided
         try:
@@ -61,7 +78,12 @@ def run_command_bare(command: Union[str, List[str]], timeout: float = 10, stdin:
                 out, err = p.communicate(timeout=1)
             except Exception:
                 out, err = b"", b""
-            return CommandRunResult(status=CommandRunStatus.TimeLimitExceeded, execution_time=timeout, stdout=out.decode(errors="ignore"), stderr=err.decode(errors="ignore"))
+            return CommandRunResult(
+                status=CommandRunStatus.TimeLimitExceeded,
+                execution_time=timeout,
+                stdout=out.decode(errors="ignore"),
+                stderr=err.decode(errors="ignore"),
+            )
 
         execution_time = p.returncode  # dummy placeholder; we measure below
         # After normal finish, ensure cleanup
@@ -73,7 +95,13 @@ def run_command_bare(command: Union[str, List[str]], timeout: float = 10, stdin:
         if config.sandbox.restore_bash:
             ensure_bash_integrity()
 
-        return CommandRunResult(status=CommandRunStatus.Finished, execution_time=execution_time, return_code=p.returncode, stdout=out.decode(errors="ignore"), stderr=err.decode(errors="ignore"))
+        return CommandRunResult(
+            status=CommandRunStatus.Finished,
+            execution_time=execution_time,
+            return_code=p.returncode,
+            stdout=out.decode(errors="ignore"),
+            stderr=err.decode(errors="ignore"),
+        )
     except Exception as e:
         tb = traceback.format_exc()
         message = f"exception on running command {command!r}: {e} | {tb}"
@@ -81,7 +109,9 @@ def run_command_bare(command: Union[str, List[str]], timeout: float = 10, stdin:
         return CommandRunResult(status=CommandRunStatus.Error, stderr=message)
 
 
-def run_commands(compile_command: Optional[str], run_command: str, cwd: str, extra_env: Optional[Dict[str, str]], args: CodeRunArgs, **kwargs) -> CodeRunResult:
+def run_commands(
+    compile_command: Optional[str], run_command: str, cwd: str, extra_env: Optional[Dict[str, str]], args: CodeRunArgs, **kwargs
+) -> CodeRunResult:
     files = {}
     compile_res = None
     run_res = None
@@ -132,7 +162,9 @@ def run_commands(compile_command: Optional[str], run_command: str, cwd: str, ext
             prefix += ["chroot", root]
 
             if compile_command is not None:
-                compile_res = run_command_bare(prefix + ["bash", "-c", f"cd {cwd} && {compile_command}"], args.compile_timeout, None, cwd, extra_env, True)
+                compile_res = run_command_bare(
+                    prefix + ["bash", "-c", f"cd {cwd} && {compile_command}"], args.compile_timeout, None, cwd, extra_env, True
+                )
             if compile_res is None or (compile_res.status == CommandRunStatus.Finished and compile_res.return_code == 0):
                 run_res = run_command_bare(prefix + ["bash", "-c", f"cd {cwd} && {run_command}"], args.run_timeout, args.stdin, cwd, extra_env, True)
 

@@ -20,7 +20,6 @@ import structlog
 from sandbox.utils.logging import configure_logging
 
 configure_logging()
-
 logger = structlog.stdlib.get_logger()
 
 T = TypeVar("T")

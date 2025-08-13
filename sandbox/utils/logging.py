@@ -64,8 +64,9 @@ def configure_logging(trace_file=None):
         )
         handlers.append(file_handler)
 
-    logging.basicConfig(level=logging.WARNING, handlers=handlers)
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
     logging.getLogger("aiosqlite").setLevel(logging.CRITICAL)
     logging.getLogger("databases").setLevel(logging.CRITICAL)
+    logging.getLogger("sandbox").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").handlers = []
     logging.getLogger("uvicorn.access").propagate = False

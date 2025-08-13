@@ -189,7 +189,7 @@ def tmp_netns(no_bridge: bool = False):
 def main():
     begin = time.time()
     print(f"start: {begin}")
-    with tmp_overlayfs() as root, tmp_cgroup(mem_limit="4G", cpu_limit=0.5) as cgroups, tmp_netns() as netns:
+    with tmp_overlayfs() as root, tmp_cgroup(mem_limit="4G", cpu_limit=0.5) as cgroups, tmp_netns() as _:
         init = time.time()
         print(f"init finish: {init - begin}")
         prefix = []
@@ -197,7 +197,7 @@ def main():
             prefix += ["cgexec", "-g", cg]
         chroot_cmd = ["chroot", root]
         # unshare_cmd = ['unshare', '--net', '--pid', '--fork', '--mount-proc']
-        unshare_cmd = ["unshare", "--pid", "--fork", "--mount-proc"]
+        # unshare_cmd = ["unshare", "--pid", "--fork", "--mount-proc"]
         # TODO: mount other volumns per need. see https://superuser.com/questions/165116/mount-dev-proc-sys-in-a-chroot-environment
         final_cmd = prefix + chroot_cmd + ["bash", "-c", f"cd /tmp && {' '.join(sys.argv[1:])}"]
         # final_cmd = prefix + chroot_cmd + unshare_cmd + ['bash', '-c', f'cd /tmp && echo $GFD']
