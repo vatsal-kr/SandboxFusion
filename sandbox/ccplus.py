@@ -1,11 +1,11 @@
 import argparse
 import logging
 import os
-import pickle
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
+import polars as pl
 import tomllib
 from datasets import Dataset, load_dataset
 from tqdm import tqdm
@@ -50,13 +50,6 @@ def create_SubmitRequest_data(example):
     return example
 
 
-def restore_completions(example, completions_dct, language, generator):
-    example["completions"] = completions_dct[example["id"]]
-    example["language"] = language
-    example["generator"] = generator
-    return example
-
-
 def create_test_config(formatted_cases: Dict, language: str):
     return TestConfig(
         locale="en",
@@ -77,26 +70,29 @@ def _submit_single_completion_single_test(idx, completion, config) -> EvalResult
     return result
 
 
+def by_modelname(example, model_name):
+    return example["generator"] == model_name
+
+
 def load_completions_and_tests(args):
     # loading test cases
     test_data = load_dataset("parquet", data_files="/root/CCPlus_1x/*.parquet", split="train")
-    test_data = test_data.filter(_quality_filter)
-    with open(f"/root/CCPlus_completions/{args.model_name}/{args.language}/completions.pkl", "rb") as f:
-        completions_dct = pickle.load(f)
+    test_data = test_data.filter(_quality_filter, num_proc=NUM_WORKERS).select_columns(["id", "test_cases"])
+    test_df = pl.from_arrow(test_data.data.table)
 
-    test_data = test_data.map(
-        restore_completions,
-        num_proc=NUM_WORKERS,
-        fn_kwargs={"completions_dct": completions_dct, "language": args.language, "generator": args.model_name},
-        desc="Restoring completions and test cases",
-    )
-    test_data = test_data.map(
+    completions_data = load_dataset("wetsoledrysoul/ccplus_completions_by_lang", split=args.language)
+    completions_data = completions_data.filter(by_modelname, num_proc=NUM_WORKERS, fn_kwargs={"model_name": args.model_name})
+    completions_df = pl.from_arrow(completions_data.data.table)
+
+    data = test_df.join(completions_df, on="id", how="inner")
+    data = Dataset(data.to_arrow())
+    data = data.map(
         create_SubmitRequest_data,
         num_proc=NUM_WORKERS,
         desc="Formatting test cases for SubmitRequest",
     )
-    test_data = test_data.select_columns(["id", "completions", "formatted_cases", "language", "generator"])
-    return test_data
+    data = data.select_columns(["id", "completions", "formatted_cases", "language", "generator"])
+    return data
 
 
 def evaluate():
@@ -171,7 +167,6 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, help="Name of the model to use")
     parser.add_argument("--language", type=str, help="Programming language to use")
     args = parser.parse_args()
-    args.model_name = args.model_name.replace(".", "_")
     args.language = args.language.lower()
     evaluate()
     log.info("Completed")
