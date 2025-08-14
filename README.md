@@ -26,7 +26,7 @@ podman run \
         bash run_ccplus.sh Llama-3.1-8B-Instruct java
 ```
 ## Running all test cases 
-The existing scripts run all tests by default. If this is not what you want, modify the `create_SubmitRequest_data` in `sandbox/ccplus.py`
+The existing scripts run all tests by default. If this is not what you want, modify `create_test_config(...)`, and `create_SubmitRequest_data(...)` in `sandbox/ccplus.py`
 ```python
 def create_SubmitRequest_data(example):
     example["formatted_cases"] = [
@@ -42,5 +42,15 @@ def create_SubmitRequest_data(example):
         }
     ]
     return example
+def create_test_config(formatted_cases: Dict, language: str):
+    return TestConfig(
+        locale="en",
+        language=language,
+        run_timeout=3,
+        dataset_type="CommonOJDataset",
+        provided_data=formatted_cases,
+        extra={"run_all_cases": False},
+    )
+
 ```
 You will have to handle the thread pool outputs accordingly, but that's about it
