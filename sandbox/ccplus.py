@@ -5,7 +5,6 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
 
-import polars as pl
 import tomllib
 from datasets import Dataset, load_dataset
 from tqdm import tqdm
@@ -74,18 +73,34 @@ def by_modelname(example, model_name):
     return example["generator"] == model_name
 
 
+def add_completions(example, completions_dct, language, generator):
+    example["completions"] = completions_dct[example["id"]]
+    example["language"] = language
+    example["generator"] = generator
+    return example
+
+
 def load_completions_and_tests(args):
     # loading test cases
     test_data = load_dataset("parquet", data_files="/root/CCPlus_1x/*.parquet", split="train")
     test_data = test_data.filter(_quality_filter, num_proc=NUM_WORKERS).select_columns(["id", "test_cases"])
-    test_df = pl.from_arrow(test_data.data.table)
 
     completions_data = load_dataset("wetsoledrysoul/ccplus_completions_by_lang", split=args.language)
-    completions_data = completions_data.filter(by_modelname, num_proc=NUM_WORKERS, fn_kwargs={"model_name": args.model_name})
-    completions_df = pl.from_arrow(completions_data.data.table)
+    completions_data = completions_data.filter(
+        by_modelname,
+        num_proc=NUM_WORKERS,
+        fn_kwargs={"model_name": args.model_name},
+        desc="Filtering by model name",
+    )
 
-    data = test_df.join(completions_df, on="id", how="inner")
-    data = Dataset(data.to_arrow())
+    completions_dct = {row["id"]: row["completions"] for row in completions_data}
+    data = test_data.map(
+        add_completions,
+        num_proc=NUM_WORKERS,
+        fn_kwargs={"completions_dct": completions_dct, "language": args.language, "generator": args.model_name},
+        desc="Adding completions to test cases",
+    )
+
     data = data.map(
         create_SubmitRequest_data,
         num_proc=NUM_WORKERS,
@@ -158,7 +173,7 @@ def evaluate():
     data: Dataset = data.add_column("atleast_one_passing_all", [results_per_prompt[idx]["atleast_one_passing_all"] for idx in prompt_indices])
     data = data.select_columns(["id", "num_passed", "num_failed", "final_verdict", "atleast_one_passing_all", "language", "generator"])
 
-    data.push_to_hub(f"CodeShield/ccp_results_{args.model_name}_{args.language}", private=True, token=HF_TOKEN)
+    data.push_to_hub(f"wetsoledrysoul/ccp_results_{args.model_name}_{args.language}", private=True, token=HF_TOKEN)
 
 
 if __name__ == "__main__":
