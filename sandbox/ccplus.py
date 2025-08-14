@@ -49,11 +49,11 @@ def create_SubmitRequest_data(example):
     return example
 
 
-def create_test_config(formatted_cases: Dict, language: str):
+def create_test_config(formatted_cases: Dict, language: str, run_timeout: int):
     return TestConfig(
         locale="en",
         language=language,
-        run_timeout=3,
+        run_timeout=run_timeout / 1000,
         dataset_type="CommonOJDataset",
         provided_data=formatted_cases,
         extra={"run_all_cases": True},
@@ -83,7 +83,7 @@ def add_completions(example, completions_dct, language, generator):
 def load_completions_and_tests(args):
     # loading test cases
     test_data = load_dataset("parquet", data_files="/root/CCPlus_1x/*.parquet", split="train")
-    test_data = test_data.filter(_quality_filter, num_proc=NUM_WORKERS).select_columns(["id", "test_cases"])
+    test_data = test_data.filter(_quality_filter, num_proc=NUM_WORKERS).select_columns(["id", "test_cases", "time_limit"])
 
     completions_data = load_dataset("wetsoledrysoul/ccplus_completions_by_lang", split=args.language)
     completions_data = completions_data.filter(
@@ -106,7 +106,7 @@ def load_completions_and_tests(args):
         num_proc=NUM_WORKERS,
         desc="Formatting test cases for SubmitRequest",
     )
-    data = data.select_columns(["id", "completions", "formatted_cases", "language", "generator"])
+    data = data.select_columns(["id", "completions", "formatted_cases", "language", "generator", "time_limit"])
     return data
 
 
@@ -117,23 +117,20 @@ def evaluate():
     all_completions: List[List[str]] = list(data["completions"])  # Size [num_prompts, num_completions_per_prompt]
     all_languages: List[str] = list(data["language"])  # Size: [num_prompts]
     prompt_indices: List[str] = list(data["id"])  # Size: [num_prompts]
-    log.info(f"all_formatted_cases shape: ({len(all_formatted_cases), len(all_formatted_cases[0])})")
-    log.info(f"all_completions shape: ({len(all_completions), len(all_completions[0])})")
-    log.info(f"all_languages shape: {len(all_languages)}")
-    log.info(f"prompt_indices shape: {len(prompt_indices)}")
+    all_timeouts: List[str] = list(data["time_limit"])  # Size: [num_prompts]
 
     iterator = [
-        (single_test, single_completion, language, prompt_idx, completion_idx)
-        for formatted_cases_per_prompt, completions_per_prompt, language, prompt_idx in zip(
-            all_formatted_cases, all_completions, all_languages, prompt_indices
+        (single_test, single_completion, language, run_timeout, prompt_idx, completion_idx)
+        for formatted_cases_per_prompt, completions_per_prompt, language, run_timeout, prompt_idx in zip(
+            all_formatted_cases, all_completions, all_languages, all_timeouts, prompt_indices
         )
         for completion_idx, single_completion in enumerate(completions_per_prompt)
         for single_test in formatted_cases_per_prompt
     ]
     log.info(f"Iterator contains {len(iterator)} instances")
     completion_inputs = [x[1] for x in iterator]
-    config_inputs = [create_test_config(x[0], x[2]) for x in iterator]
-    meta_indices = [(x[3], x[4]) for x in iterator]
+    config_inputs = [create_test_config(x[0], x[2], x[3]) for x in iterator]
+    meta_indices = [(x[4], x[5]) for x in iterator]
 
     results = [None] * len(iterator)
 
