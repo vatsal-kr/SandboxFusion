@@ -61,7 +61,7 @@ def create_test_config(formatted_cases: Dict, language: str):
     return TestConfig(
         locale="en",
         language=language,
-        run_timeout=15,
+        run_timeout=3,
         dataset_type="CommonOJDataset",
         provided_data=formatted_cases,
         extra={"run_all_cases": True},
