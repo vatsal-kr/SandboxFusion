@@ -85,7 +85,6 @@ def load_completions_and_tests(args):
         desc="Formatting test cases for SubmitRequest",
     )
     test_data = test_data.select_columns(["question_id", "completions", "formatted_cases", "language"])
-    test_data = test_data.select(range(10))
     return test_data
 
 
