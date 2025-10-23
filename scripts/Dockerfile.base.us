@@ -53,6 +53,10 @@ RUN apt-get install -y php-cli=2:7.4+75
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.76.0
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# R, lua, ruby, julia, perl, scala
+RUN apt-get install -y r-base lua5.2 luarocks ruby-full julia scala \
+    && luarocks install luaunit \
+    && TAR_OPTIONS=--no-same-owner PERL_MM_USE_DEFAULT=1 cpan Test::Deep Data::Compare
 # D
 RUN wget https://netcologne.dl.sourceforge.net/project/d-apt/files/d-apt.list -O /etc/apt/sources.list.d/d-apt.list \
     && apt-get update --allow-insecure-repositories -y \
@@ -113,8 +117,8 @@ RUN cd /root/sandbox/runtime/node && npm ci && \
 RUN dotnet new console -o /tmp/dotnet && dotnet run --project /tmp/dotnet
 
 # cache lean
-COPY ./runtime/lean /root/sandbox/runtime/lean
-RUN cd /root/sandbox/runtime/lean && lake build
+# COPY ./runtime/lean /root/sandbox/runtime/lean
+# RUN cd /root/sandbox/runtime/lean && lake build
 
 COPY ./runtime/python ./runtime/python
 RUN cd ./runtime/python && bash install-python-runtime.sh us
