@@ -85,7 +85,7 @@ def load_completions_and_tests(args):
     test_data = load_dataset("parquet", data_files="/root/CCPlus_1x/*.parquet", split="train")
     test_data = test_data.filter(_quality_filter, num_proc=NUM_WORKERS).select_columns(["id", "test_cases", "time_limit"])
 
-    completions_data = load_dataset("wetsoledrysoul/ccplus_completions_by_lang", split=args.language)
+    completions_data = load_dataset("wetsoledrysoul/LowRes-Gens", split=args.language)
     completions_data = completions_data.filter(
         by_modelname,
         num_proc=NUM_WORKERS,
@@ -156,7 +156,8 @@ def evaluate():
             "num_passed": [sum(results_by_completion) for results_by_completion in inner_dict.values()],
             "num_failed": [len(results_by_completion) - sum(results_by_completion) for results_by_completion in inner_dict.values()],
             "final_verdict": [all(results_by_completion) for results_by_completion in inner_dict.values()],
-            "atleast_one_passing_all": any([all(results_by_completion) for results_by_completion in inner_dict.values()]),
+            "pass_rate": [sum(results_by_completion) / len(results_by_completion) for results_by_completion in inner_dict.values()],
+            "pairable": any([all(results_by_completion) for results_by_completion in inner_dict.values()]) and any([not all(results_by_completion) for results_by_completion in inner_dict.values()]),
         }
 
     data: Dataset = data.add_column("num_passed", [results_per_prompt[idx]["num_passed"] for idx in prompt_indices])
@@ -165,7 +166,7 @@ def evaluate():
     data: Dataset = data.add_column("atleast_one_passing_all", [results_per_prompt[idx]["atleast_one_passing_all"] for idx in prompt_indices])
     data = data.select_columns(["id", "num_passed", "num_failed", "final_verdict", "atleast_one_passing_all", "language", "generator"])
 
-    data.push_to_hub(f"wetsoledrysoul/ccp_results_{args.model_name}_{args.language}", private=True, token=HF_TOKEN)
+    data.push_to_hub(f"wetsoledrysoul/{args.model_name}_{args.language}", private=True, token=HF_TOKEN)
 
 
 if __name__ == "__main__":
